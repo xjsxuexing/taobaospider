@@ -1,0 +1,90 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+__author__ = ['xjs <jingsheng_xu@bacic5i5j.com>']
+
+import requests
+import json
+import re
+import pandas as pd
+import pymysql
+
+class TaobaoSpider(object):
+    #创建一个淘宝列表页商品爬虫
+    def __init__(self):
+        self.json_url = []
+        self.source = []
+        self.result_list = []
+        self.title = []
+        self.link = []
+        self.price = []
+        self.sale = []
+        self.nick = []
+
+    def get_url(self,keyword):
+        #获取URL，由于没有使用淘宝的API，所以URL的翻页存在问题，是通过s={}的数量来控制，第1页为44，第2页为88依次类推
+        for i in range(0, 248, 44):
+            url = 'https://s.taobao.com/search?q={}&imgfile=&commend=all&ssid=s5-e&search_type=item&sourceId=tb.index&spm=a21bo.50862.201856-taobao-item.1&ie=utf8&bcoffset=4&ntoffset=4&p4ppushleft=1%2C48&s={}'.format(keyword,i)
+            self.json_url.append(url)
+        #print(self.json_url)
+
+    def get_source(self):
+        #获取页面内容，页面内容需要将编码方式订为UTR-8否则中文会出现乱码
+        for self.url in self.json_url:
+            html = requests.get(self.url)
+            self.source.append(html.content.decode('utf-8'))
+
+    def get_item_list(self):
+        #对页面内容进行解析
+        for source in self.source:
+            g_page_config = re.search('g_page_config(.+?)}};', source)
+            source1 = g_page_config.group()
+            source2 = re.search('{(.+?)}};', source1)
+            source3 = str(source2.group().strip(';'))
+            item_dict = json.loads(source3)
+            item_list = item_dict['mods']['itemlist']['data']['auctions']
+            for item in item_list:
+                titles = item['title'].replace('<span class=H>', '').replace('</span>', '')
+                links = item['detail_url']
+                prices = item['view_price']
+                sales = item['view_sales']
+                nicks = item['nick']
+                self.title.append(titles)
+                self.link.append(links)
+                self.price.append(prices)
+                self.sale.append(sales)
+                self.nick.append(nicks)
+
+
+    def write_data(self):
+        #将抓取的信息写入到一个CSV文件中
+        key_name = [self.title,self.link,self.price,self.sale,self.nick]
+        out_put = pd.DataFrame(key_name,index=['标题','链接','价格','付款人数','商家名称'])
+        file_name = r'C:\Users\Administrator\Desktop\123.csv'
+        out_put.T.to_csv(file_name, encoding='gbk', index=False, mode='w')
+
+
+    # def to_mysql(self):
+    #将抓取的内容存入到MYSQL数据库中
+    #     conn = pymysql.connect(host='127.0.0.1', user='root', passwd='xjs123', db='mysql', use_unicode=True,
+    #                            charset="utf8")
+    #     cur = conn.cursor()
+    #     cur.execute("USE taobao")
+    #     for title_l,link_l,price_l,sale_l,nick_l in zip(self.title,self.link,self.price,self.sale,self.nick):
+    #         sql = "INSERT INTO taobao_list_link (title,link,price,sales,nick)VALUES(%s,%s,%s,%s,%s)"
+    #         cur.execute(sql, (title_l, link_l, price_l, sale_l, nick_l))
+    #         cur.connection.commit()
+    #     cur.close()
+    #     conn.close()
+
+
+
+
+
+if __name__ == '__main__':
+    keyword = input('请输入关键词: ')
+    taobaospider = TaobaoSpider()
+    taobaospider.get_url(keyword)
+    taobaospider.get_source()
+    taobaospider.get_item_list()
+    taobaospider.write_data()
+    #taobaospider.to_mysql()
